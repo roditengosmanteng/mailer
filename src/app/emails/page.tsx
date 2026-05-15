@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
   CheckCircle,
@@ -11,9 +12,15 @@ import {
   RefreshCw,
   Mail,
   Filter,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/components/toast-provider";
 import { ConfirmDialog, useConfirmDialog } from "@/components/confirm-dialog";
+
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 
 interface Email {
   id: string;
@@ -40,16 +47,51 @@ interface Batch {
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function EmailsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Read pagination state from URL params (persists on refresh)
+  const page = Number(searchParams.get("page")) || 1;
+  const limit = Number(searchParams.get("limit")) || 50;
+  const [pageInput, setPageInput] = useState(String(page));
+
   const [selectedBatch, setSelectedBatch] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [validating, setValidating] = useState(false);
   const [aiValidating, setAiValidating] = useState(false);
-  const [page, setPage] = useState(1);
   const { addToast } = useToast();
   const { confirm, dialogProps } = useConfirmDialog();
 
-  const emailParams = new URLSearchParams({ page: String(page), limit: "50" });
+  // Helper to update URL params
+  const updateParams = useCallback(
+    (updates: Record<string, string | number>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, val] of Object.entries(updates)) {
+        params.set(key, String(val));
+      }
+      router.push(`/emails?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, router]
+  );
+
+  const setPage = useCallback(
+    (p: number) => {
+      setPageInput(String(p));
+      updateParams({ page: p });
+    },
+    [updateParams]
+  );
+
+  const setLimit = useCallback(
+    (l: number) => {
+      setPageInput("1");
+      updateParams({ page: 1, limit: l });
+    },
+    [updateParams]
+  );
+
+  const emailParams = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (selectedBatch) emailParams.set("batchId", selectedBatch);
   if (statusFilter) emailParams.set("status", statusFilter);
 
@@ -395,27 +437,90 @@ export default function EmailsPage() {
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-6">
+      {/* Pagination bar */}
+      <div className="flex items-center justify-between mt-6 gap-4 flex-wrap">
+        {/* Per-page selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--muted-foreground)]">Show</span>
+          <select
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            className="px-2.5 py-1.5 rounded-lg text-sm w-20"
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <span className="text-xs text-[var(--muted-foreground)]">per page</span>
+        </div>
+
+        {/* Navigation controls */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setPage(1)}
+            disabled={page === 1}
+            className="p-2 rounded-lg btn-secondary disabled:opacity-30"
+            title="First page"
+          >
+            <ChevronsLeft size={16} />
+          </button>
           <button
             onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
-            className="px-4 py-2 rounded-lg text-sm font-medium btn-secondary disabled:opacity-30"
+            className="p-2 rounded-lg btn-secondary disabled:opacity-30"
+            title="Previous page"
           >
-            Previous
+            <ChevronLeft size={16} />
           </button>
-          <span className="text-sm text-[var(--muted-foreground)]">
-            Page {page} of {totalPages}
-          </span>
+
+          <div className="flex items-center gap-1.5 mx-2">
+            <span className="text-xs text-[var(--muted-foreground)]">Page</span>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageInput}
+              onChange={(e) => setPageInput(e.target.value)}
+              onBlur={() => {
+                const n = Math.max(1, Math.min(totalPages, Number(pageInput) || 1));
+                setPage(n);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const n = Math.max(1, Math.min(totalPages, Number(pageInput) || 1));
+                  setPage(n);
+                }
+              }}
+              className="w-16 px-2 py-1.5 rounded-lg text-sm text-center"
+            />
+            <span className="text-xs text-[var(--muted-foreground)]">
+              of {totalPages}
+            </span>
+          </div>
+
           <button
             onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg text-sm font-medium btn-secondary disabled:opacity-30"
+            className="p-2 rounded-lg btn-secondary disabled:opacity-30"
+            title="Next page"
           >
-            Next
+            <ChevronRight size={16} />
+          </button>
+          <button
+            onClick={() => setPage(totalPages)}
+            disabled={page === totalPages}
+            className="p-2 rounded-lg btn-secondary disabled:opacity-30"
+            title="Last page"
+          >
+            <ChevronsRight size={16} />
           </button>
         </div>
-      )}
+
+        {/* Total count */}
+        <span className="text-xs text-[var(--muted-foreground)]">
+          {totalEmails} emails total
+        </span>
+      </div>
     </div>
   );
 }
