@@ -80,29 +80,18 @@ export default function ExportPage() {
 
   const handleExport = async () => {
     setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (selectedBatch) params.set("batchId", selectedBatch);
-      if (statusFilter) params.set("status", statusFilter);
-      if (minScore && parseFloat(minScore) > 0)
-        params.set("minScore", minScore);
-      params.set("delimiter", delimiter);
-      params.set("columns", Array.from(selectedColumns).join(","));
+    const params = new URLSearchParams();
+    if (selectedBatch) params.set("batchId", selectedBatch);
+    if (statusFilter) params.set("status", statusFilter);
+    if (minScore && parseFloat(minScore) > 0)
+      params.set("minScore", minScore);
+    params.set("delimiter", delimiter);
+    params.set("columns", Array.from(selectedColumns).join(","));
 
-      const res = await fetch(`/api/emails/export?${params}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `verified-emails-${new Date().toISOString().split("T")[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      addToast("Export downloaded successfully", "success");
-    } catch {
-      addToast("Export failed", "error");
-    }
+    // Direct download — the API returns Content-Disposition: attachment
+    // so the browser downloads it as a .csv file to the Downloads folder
+    window.location.href = `/api/emails/export?${params}`;
+    addToast("Export download started", "success");
     setLoading(false);
   };
 
