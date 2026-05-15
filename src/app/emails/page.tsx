@@ -9,7 +9,11 @@ import {
   Brain,
   Trash2,
   RefreshCw,
+  Mail,
+  Filter,
 } from "lucide-react";
+import { useToast } from "@/components/toast-provider";
+import { ConfirmDialog, useConfirmDialog } from "@/components/confirm-dialog";
 
 interface Email {
   id: string;
@@ -42,6 +46,8 @@ export default function EmailsPage() {
   const [validating, setValidating] = useState(false);
   const [aiValidating, setAiValidating] = useState(false);
   const [page, setPage] = useState(1);
+  const { addToast } = useToast();
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const emailParams = new URLSearchParams({ page: String(page), limit: "50" });
   if (selectedBatch) emailParams.set("batchId", selectedBatch);
@@ -56,18 +62,25 @@ export default function EmailsPage() {
 
   const emails = emailData?.emails ?? [];
   const totalPages = emailData?.pagination?.totalPages ?? 1;
+  const totalEmails = emailData?.pagination?.total ?? 0;
   const batches = batchData?.batches ?? [];
 
   const handleValidate = async () => {
     setValidating(true);
     const ids = selectedEmails.size > 0 ? Array.from(selectedEmails) : undefined;
-    await fetch("/api/emails/validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        ids ? { emailIds: ids } : { batchId: selectedBatch || undefined }
-      ),
-    });
+    try {
+      const res = await fetch("/api/emails/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          ids ? { emailIds: ids } : { batchId: selectedBatch || undefined }
+        ),
+      });
+      const data = await res.json();
+      addToast(`Validated ${data.validated || 0} emails`, "success");
+    } catch {
+      addToast("Validation failed", "error");
+    }
     setValidating(false);
     setSelectedEmails(new Set());
     mutateEmails();
@@ -76,15 +89,21 @@ export default function EmailsPage() {
   const handleAIValidate = async () => {
     setAiValidating(true);
     const ids = selectedEmails.size > 0 ? Array.from(selectedEmails) : undefined;
-    await fetch("/api/emails/ai-validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        ids
-          ? { emailIds: ids }
-          : { batchId: selectedBatch || undefined }
-      ),
-    });
+    try {
+      const res = await fetch("/api/emails/ai-validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          ids
+            ? { emailIds: ids }
+            : { batchId: selectedBatch || undefined }
+        ),
+      });
+      const data = await res.json();
+      addToast(`AI verified ${data.verified || 0} emails`, "success");
+    } catch {
+      addToast("AI validation failed", "error");
+    }
     setAiValidating(false);
     setSelectedEmails(new Set());
     mutateEmails();
@@ -92,11 +111,26 @@ export default function EmailsPage() {
 
   const handleDelete = async () => {
     if (selectedEmails.size === 0) return;
-    await fetch("/api/emails", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: Array.from(selectedEmails) }),
+
+    const confirmed = await confirm({
+      title: "Delete Emails",
+      message: `Are you sure you want to delete ${selectedEmails.size} email(s)? This action cannot be undone.`,
+      confirmLabel: `Delete ${selectedEmails.size}`,
+      variant: "danger",
     });
+
+    if (!confirmed) return;
+
+    try {
+      await fetch("/api/emails", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedEmails) }),
+      });
+      addToast(`Deleted ${selectedEmails.size} emails`, "info");
+    } catch {
+      addToast("Failed to delete emails", "error");
+    }
     setSelectedEmails(new Set());
     mutateEmails();
   };
@@ -119,22 +153,45 @@ export default function EmailsPage() {
   const statusIcon = (status: string) => {
     switch (status) {
       case "valid":
-        return <CheckCircle size={16} className="text-green-500" />;
+        return <CheckCircle size={14} className="text-green-400" />;
       case "invalid":
-        return <XCircle size={16} className="text-red-500" />;
+      case "bounced":
+        return <XCircle size={14} className="text-red-400" />;
       case "validating":
-        return <RefreshCw size={16} className="text-yellow-500 animate-spin" />;
+        return <RefreshCw size={14} className="text-amber-400 animate-spin" />;
       default:
-        return <Clock size={16} className="text-gray-400" />;
+        return <Clock size={14} className="text-[var(--muted-foreground)]" />;
+    }
+  };
+
+  const statusBadgeClass = (status: string) => {
+    switch (status) {
+      case "valid":
+        return "badge-success";
+      case "invalid":
+      case "bounced":
+        return "badge-error";
+      case "validating":
+        return "badge-warning";
+      default:
+        return "badge-neutral";
     }
   };
 
   return (
-    <div className="p-8">
+    <div className="p-8 fade-in">
+      <ConfirmDialog {...dialogProps} />
+
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Emails</h1>
-          <p className="text-[var(--muted-foreground)] mt-1">
+          <div className="flex items-center gap-3 mb-1">
+            <Mail size={24} className="text-[var(--primary-light)]" />
+            <h1 className="text-2xl font-bold">Emails</h1>
+            {totalEmails > 0 && (
+              <span className="badge badge-info">{totalEmails} total</span>
+            )}
+          </div>
+          <p className="text-[var(--muted-foreground)] ml-9">
             Manage and validate your email list
           </p>
         </div>
@@ -142,7 +199,7 @@ export default function EmailsPage() {
           <button
             onClick={handleValidate}
             disabled={validating}
-            className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 rounded-lg text-sm font-medium btn-primary flex items-center gap-2"
           >
             <CheckCircle size={16} />
             {validating ? "Validating..." : "Validate MX/SMTP"}
@@ -150,7 +207,7 @@ export default function EmailsPage() {
           <button
             onClick={handleAIValidate}
             disabled={aiValidating}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-gradient-to-r from-purple-600/80 to-violet-600/80 text-white border border-purple-500/20 hover:from-purple-600 hover:to-violet-600 transition-all shadow-lg shadow-purple-500/10 disabled:opacity-50"
           >
             <Brain size={16} />
             {aiValidating ? "AI Checking..." : "AI Verify"}
@@ -158,7 +215,7 @@ export default function EmailsPage() {
           {selectedEmails.size > 0 && (
             <button
               onClick={handleDelete}
-              className="px-4 py-2 bg-[var(--destructive)] text-[var(--destructive-foreground)] rounded-lg text-sm font-medium hover:opacity-90 flex items-center gap-2"
+              className="px-4 py-2 rounded-lg text-sm font-medium btn-danger flex items-center gap-2"
             >
               <Trash2 size={16} />
               Delete ({selectedEmails.size})
@@ -167,14 +224,15 @@ export default function EmailsPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 mb-4">
+      <div className="flex gap-3 mb-4 items-center">
+        <Filter size={16} className="text-[var(--muted-foreground)]" />
         <select
           value={selectedBatch}
           onChange={(e) => {
             setSelectedBatch(e.target.value);
             setPage(1);
           }}
-          className="px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--card)]"
+          className="px-3 py-2 rounded-lg text-sm"
         >
           <option value="">All Batches</option>
           {batches.map((b) => (
@@ -189,121 +247,142 @@ export default function EmailsPage() {
             setStatusFilter(e.target.value);
             setPage(1);
           }}
-          className="px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--card)]"
+          className="px-3 py-2 rounded-lg text-sm"
         >
           <option value="">All Status</option>
           <option value="pending">Pending</option>
           <option value="valid">Valid</option>
           <option value="invalid">Invalid</option>
+          <option value="bounced">Bounced</option>
           <option value="validating">Validating</option>
         </select>
       </div>
 
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--secondary)]">
-              <th className="p-3 text-left">
+            <tr className="border-b border-[var(--border)]">
+              <th className="p-3.5 text-left w-10">
                 <input
                   type="checkbox"
                   checked={
                     emails.length > 0 && selectedEmails.size === emails.length
                   }
                   onChange={toggleSelectAll}
-                  className="rounded"
                 />
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 Email
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 Name
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 Organization
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 MX
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 AI Score
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 Status
               </th>
-              <th className="p-3 text-left text-sm font-medium text-[var(--muted-foreground)]">
+              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 Source
               </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={8} className="p-8 text-center text-[var(--muted-foreground)]">
-                  Loading...
-                </td>
-              </tr>
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b border-[var(--border)]">
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <td key={j} className="p-3.5">
+                      <div className="skeleton h-4 w-full" />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : emails.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-[var(--muted-foreground)]">
-                  No emails found. Import some emails to get started.
+                <td colSpan={8} className="p-12 text-center">
+                  <Mail size={32} className="mx-auto text-[var(--muted-foreground)] opacity-30 mb-3" />
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    No emails found. Import some emails to get started.
+                  </p>
                 </td>
               </tr>
             ) : (
               emails.map((email) => (
                 <tr
                   key={email.id}
-                  className="border-b border-[var(--border)] hover:bg-[var(--secondary)] transition-colors"
+                  className="border-b border-[var(--border)] table-row-hover"
                 >
-                  <td className="p-3">
+                  <td className="p-3.5">
                     <input
                       type="checkbox"
                       checked={selectedEmails.has(email.id)}
                       onChange={() => toggleSelect(email.id)}
-                      className="rounded"
                     />
                   </td>
-                  <td className="p-3 text-sm font-mono">{email.address}</td>
-                  <td className="p-3 text-sm">{email.name || "-"}</td>
-                  <td className="p-3 text-sm">{email.organization || "-"}</td>
-                  <td className="p-3 text-sm">
+                  <td className="p-3.5 text-sm font-mono text-[var(--primary-light)]">{email.address}</td>
+                  <td className="p-3.5 text-sm">{email.name || <span className="text-[var(--muted-foreground)] opacity-40">—</span>}</td>
+                  <td className="p-3.5 text-sm">{email.organization || <span className="text-[var(--muted-foreground)] opacity-40">—</span>}</td>
+                  <td className="p-3.5 text-sm">
                     {email.mxValid === null ? (
-                      <span className="text-gray-400">-</span>
+                      <span className="text-[var(--muted-foreground)] opacity-40">—</span>
                     ) : email.mxValid ? (
-                      <CheckCircle size={16} className="text-green-500" />
+                      <CheckCircle size={16} className="text-green-400" />
                     ) : (
-                      <XCircle size={16} className="text-red-500" />
+                      <XCircle size={16} className="text-red-400" />
                     )}
                   </td>
-                  <td className="p-3 text-sm">
+                  <td className="p-3.5 text-sm">
                     {email.aiScore !== null ? (
-                      <span
-                        className={`font-medium ${
-                          email.aiScore >= 0.7
-                            ? "text-green-600"
-                            : email.aiScore >= 0.4
-                              ? "text-yellow-600"
-                              : "text-red-600"
-                        }`}
-                      >
-                        {Math.round(email.aiScore * 100)}%
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="progress-bar w-12">
+                          <div
+                            className="progress-fill"
+                            style={{
+                              width: `${Math.round(email.aiScore * 100)}%`,
+                              background: email.aiScore >= 0.7
+                                ? "#22c55e"
+                                : email.aiScore >= 0.4
+                                  ? "#f59e0b"
+                                  : "#ef4444",
+                            }}
+                          />
+                        </div>
+                        <span
+                          className={`text-xs font-medium ${
+                            email.aiScore >= 0.7
+                              ? "text-green-400"
+                              : email.aiScore >= 0.4
+                                ? "text-amber-400"
+                                : "text-red-400"
+                          }`}
+                        >
+                          {Math.round(email.aiScore * 100)}%
+                        </span>
+                      </div>
                     ) : (
-                      <span className="text-gray-400">-</span>
+                      <span className="text-[var(--muted-foreground)] opacity-40">—</span>
                     )}
                   </td>
-                  <td className="p-3">
-                    <span className="flex items-center gap-1.5 text-sm">
+                  <td className="p-3.5">
+                    <span className={`badge ${statusBadgeClass(email.status)}`}>
                       {statusIcon(email.status)}
                       {email.status}
                     </span>
                   </td>
-                  <td className="p-3 text-sm">
+                  <td className="p-3.5 text-sm">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-xs ${
+                      className={`badge ${
                         email.source === "import"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-purple-100 text-purple-700"
+                          ? "badge-info"
+                          : "bg-purple-500/10 text-purple-300 border border-purple-500/20"
                       }`}
                     >
                       {email.source}
@@ -317,11 +396,11 @@ export default function EmailsPage() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-4">
+        <div className="flex items-center justify-center gap-3 mt-6">
           <button
             onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 border border-[var(--border)] rounded-lg text-sm disabled:opacity-50"
+            className="px-4 py-2 rounded-lg text-sm font-medium btn-secondary disabled:opacity-30"
           >
             Previous
           </button>
@@ -331,7 +410,7 @@ export default function EmailsPage() {
           <button
             onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1.5 border border-[var(--border)] rounded-lg text-sm disabled:opacity-50"
+            className="px-4 py-2 rounded-lg text-sm font-medium btn-secondary disabled:opacity-30"
           >
             Next
           </button>

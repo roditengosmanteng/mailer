@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Plus, Trash2, Settings, Brain } from "lucide-react";
+import { Plus, Trash2, Settings, Brain, Shield, Zap, X } from "lucide-react";
+import { useToast } from "@/components/toast-provider";
+import { ConfirmDialog, useConfirmDialog } from "@/components/confirm-dialog";
 
 interface AIProvider {
   id: string;
@@ -33,6 +35,8 @@ export default function SettingsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { addToast } = useToast();
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const { data, mutate } = useSWR<{ providers: AIProvider[] }>(
     "/api/ai-providers",
@@ -59,22 +63,33 @@ export default function SettingsPage() {
 
     if (!res.ok) {
       setError(result.error);
+      addToast("Failed to add provider", "error");
     } else {
       setShowForm(false);
       setForm({ name: "", type: "openai", apiKey: "", model: "gpt-4o-mini", baseUrl: "" });
       mutate();
+      addToast(`Provider "${form.name}" added successfully`, "success");
     }
 
     setSaving(false);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (provider: AIProvider) => {
+    const confirmed = await confirm({
+      title: "Delete Provider",
+      message: `Are you sure you want to delete "${provider.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
     await fetch("/api/ai-providers", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id: provider.id }),
     });
     mutate();
+    addToast(`Provider "${provider.name}" deleted`, "info");
   };
 
   const handleToggleActive = async (provider: AIProvider) => {
@@ -84,39 +99,62 @@ export default function SettingsPage() {
       body: JSON.stringify({ id: provider.id, isActive: !provider.isActive }),
     });
     mutate();
+    addToast(
+      `Provider "${provider.name}" ${!provider.isActive ? "activated" : "deactivated"}`,
+      !provider.isActive ? "success" : "info"
+    );
   };
 
   const selectedType = providerTypes.find((p) => p.value === form.type);
 
+  const providerIcons: Record<string, string> = {
+    openai: "🤖",
+    google: "✨",
+    anthropic: "🧠",
+    custom: "⚡",
+  };
+
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-8 max-w-3xl mx-auto fade-in">
+      <ConfirmDialog {...dialogProps} />
+
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-[var(--muted-foreground)] mt-1">
+        <div className="flex items-center gap-3 mb-1">
+          <Settings size={24} className="text-[var(--primary-light)]" />
+          <h1 className="text-2xl font-bold">Settings</h1>
+        </div>
+        <p className="text-[var(--muted-foreground)] ml-9">
           Configure AI providers for email verification and scraping
         </p>
       </div>
 
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="glass-card p-6 mb-6">
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <Brain size={20} className="text-[var(--primary)]" />
-            <h2 className="text-lg font-semibold">AI Providers</h2>
+            <Brain size={18} className="text-[var(--primary-light)]" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              AI Providers
+            </h2>
+            {providers.length > 0 && (
+              <span className="badge badge-info">{providers.length}</span>
+            )}
           </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="px-3 py-1.5 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg text-sm font-medium flex items-center gap-1"
+            className={`px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all ${
+              showForm ? "btn-secondary" : "btn-primary"
+            }`}
           >
-            <Plus size={16} />
-            Add Provider
+            {showForm ? <X size={16} /> : <Plus size={16} />}
+            {showForm ? "Cancel" : "Add Provider"}
           </button>
         </div>
 
         {showForm && (
-          <div className="bg-[var(--secondary)] rounded-lg p-4 mb-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="p-5 mb-5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
                   Provider Name *
                 </label>
                 <input
@@ -126,11 +164,11 @@ export default function SettingsPage() {
                     setForm({ ...form, name: e.target.value })
                   }
                   placeholder="e.g. My OpenAI Key"
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--background)]"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
                   Provider Type *
                 </label>
                 <select
@@ -142,7 +180,7 @@ export default function SettingsPage() {
                       "";
                     setForm({ ...form, type, model: defaultModel });
                   }}
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--background)]"
+                  className="w-full px-3.5 py-2.5 rounded-lg text-sm"
                 >
                   {providerTypes.map((p) => (
                     <option key={p.value} value={p.value}>
@@ -154,7 +192,7 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
                 API Key *
               </label>
               <input
@@ -164,13 +202,13 @@ export default function SettingsPage() {
                   setForm({ ...form, apiKey: e.target.value })
                 }
                 placeholder="sk-..."
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--background)]"
+                className="w-full px-3.5 py-2.5 rounded-lg text-sm"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
                   Model *
                 </label>
                 {selectedType && selectedType.models.length > 0 ? (
@@ -179,7 +217,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       setForm({ ...form, model: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--background)]"
+                    className="w-full px-3.5 py-2.5 rounded-lg text-sm"
                   >
                     {selectedType.models.map((m) => (
                       <option key={m} value={m}>
@@ -195,13 +233,13 @@ export default function SettingsPage() {
                       setForm({ ...form, model: e.target.value })
                     }
                     placeholder="model-name"
-                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--background)]"
+                    className="w-full px-3.5 py-2.5 rounded-lg text-sm"
                   />
                 )}
               </div>
               {form.type === "custom" && (
                 <div>
-                  <label className="block text-xs font-medium mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
                     Base URL *
                   </label>
                   <input
@@ -211,80 +249,69 @@ export default function SettingsPage() {
                       setForm({ ...form, baseUrl: e.target.value })
                     }
                     placeholder="https://api.example.com/v1"
-                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--background)]"
+                    className="w-full px-3.5 py-2.5 rounded-lg text-sm"
                   />
                 </div>
               )}
             </div>
 
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-400">{error}</p>
             )}
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleAdd}
-                disabled={saving}
-                className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg text-sm font-medium disabled:opacity-50"
-              >
-                {saving ? "Saving..." : "Save Provider"}
-              </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 border border-[var(--border)] rounded-lg text-sm"
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={handleAdd}
+              disabled={saving}
+              className="px-5 py-2.5 rounded-lg text-sm font-medium btn-primary disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Provider"}
+            </button>
           </div>
         )}
 
         {providers.length === 0 ? (
-          <div className="text-center py-8 text-[var(--muted-foreground)]">
-            <Settings size={32} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No AI providers configured yet.</p>
-            <p className="text-xs mt-1">
-              Add an OpenAI, Google Gemini, or Anthropic provider to enable AI
-              features.
+          <div className="text-center py-10">
+            <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-gradient-to-br from-indigo-500/10 to-purple-500/10">
+              <Zap size={24} className="text-[var(--muted-foreground)] opacity-50" />
+            </div>
+            <p className="text-sm text-[var(--muted-foreground)]">No AI providers configured yet</p>
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+              Add an OpenAI, Google Gemini, or Anthropic provider to enable AI features
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {providers.map((provider) => (
               <div
                 key={provider.id}
-                className="flex items-center justify-between p-3 bg-[var(--secondary)] rounded-lg"
+                className="flex items-center justify-between p-4 bg-[var(--secondary)] rounded-xl border border-[var(--border)] hover:border-[var(--border-bright)] transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      provider.isActive ? "bg-green-500" : "bg-gray-400"
-                    }`}
-                  />
+                  <span className="text-xl">{providerIcons[provider.type] || "⚡"}</span>
                   <div>
                     <p className="font-medium text-sm">{provider.name}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      {provider.type} &middot; {provider.model}
-                      {provider.baseUrl && ` &middot; ${provider.baseUrl}`}
+                      {provider.type} · {provider.model}
+                      {provider.baseUrl && ` · ${provider.baseUrl}`}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleToggleActive(provider)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium ${
+                    className={`badge cursor-pointer transition-all ${
                       provider.isActive
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-600"
+                        ? "badge-success"
+                        : "badge-neutral"
                     }`}
                   >
                     {provider.isActive ? "Active" : "Inactive"}
                   </button>
                   <button
-                    onClick={() => handleDelete(provider.id)}
-                    className="p-1 text-[var(--muted-foreground)] hover:text-[var(--destructive)]"
+                    onClick={() => handleDelete(provider)}
+                    className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-red-400 hover:bg-red-500/10 transition-all"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -293,23 +320,28 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6">
-        <h2 className="text-lg font-semibold mb-4">About AI Validation</h2>
+      <div className="glass-card p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield size={18} className="text-[var(--primary-light)]" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            About AI Validation
+          </h2>
+        </div>
         <div className="space-y-3 text-sm text-[var(--muted-foreground)]">
           <p>
             The AI validation feature searches the internet to verify if an
             email address belongs to a real person at a given organization.
           </p>
           <p>
-            <strong>How it works:</strong> For an email like{" "}
-            <code className="bg-[var(--secondary)] px-1 rounded">
+            <strong className="text-[var(--foreground)]">How it works:</strong> For an email like{" "}
+            <code className="px-1.5 py-0.5 rounded bg-[var(--secondary)] text-[var(--primary-light)] text-xs font-mono">
               mistera@moh.gov.my
             </code>
             , the AI searches for &quot;mistera moh&quot; to find if this
             person exists at the Ministry of Health Malaysia.
           </p>
           <p>
-            <strong>Supported providers:</strong> OpenAI (GPT-4, GPT-3.5),
+            <strong className="text-[var(--foreground)]">Supported providers:</strong> OpenAI (GPT-4, GPT-3.5),
             Google Gemini, Anthropic Claude, or any OpenAI-compatible API.
           </p>
         </div>

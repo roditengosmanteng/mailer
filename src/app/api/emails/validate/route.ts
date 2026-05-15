@@ -45,7 +45,11 @@ export async function POST(request: Request) {
         smtpValid = await validateSMTP(email.address, domain);
       }
 
-      const status = mxValid ? (smtpValid ? "valid" : "valid") : "invalid";
+      // MX validity is the primary signal. SMTP (port 25 RCPT TO) is unreliable —
+      // many government/corporate mail servers block probe connections as anti-spam,
+      // causing false negatives for valid emails. SMTP result is stored in smtpValid
+      // field for reference but doesn't downgrade the status.
+      const status = mxValid ? "valid" : "invalid";
 
       const updated = await prisma.email.update({
         where: { id: email.id },
