@@ -14,6 +14,8 @@ import {
   Filter,
   ChevronsLeft,
   ChevronsRight,
+  Pencil,
+  Check,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -56,6 +58,8 @@ export default function EmailsPage() {
   const [pageInput, setPageInput] = useState(String(page));
 
   const [selectedBatch, setSelectedBatch] = useState<string>("");
+  const [renamingBatch, setRenamingBatch] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [validating, setValidating] = useState(false);
@@ -100,7 +104,28 @@ export default function EmailsPage() {
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }>(`/api/emails?${emailParams}`, fetcher);
 
-  const { data: batchData } = useSWR<{ batches: Batch[] }>("/api/batches", fetcher);
+  const { data: batchData, mutate: mutateBatches } = useSWR<{ batches: Batch[] }>("/api/batches", fetcher);
+
+  const handleRenameBatch = async (batchId: string) => {
+    if (!renameValue.trim()) return;
+    try {
+      const res = await fetch("/api/batches", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: batchId, name: renameValue.trim() }),
+      });
+      if (res.ok) {
+        addToast(`Batch renamed to "${renameValue.trim()}"`, "success");
+        mutateBatches();
+      } else {
+        addToast("Failed to rename batch", "error");
+      }
+    } catch {
+      addToast("Failed to rename batch", "error");
+    }
+    setRenamingBatch(null);
+    setRenameValue("");
+  };
 
   const emails = emailData?.emails ?? [];
   const totalPages = emailData?.pagination?.totalPages ?? 1;
@@ -273,6 +298,7 @@ export default function EmailsPage() {
           onChange={(e) => {
             setSelectedBatch(e.target.value);
             setPage(1);
+            setRenamingBatch(null);
           }}
           className="px-3 py-2 rounded-lg text-sm"
         >
@@ -283,6 +309,54 @@ export default function EmailsPage() {
             </option>
           ))}
         </select>
+
+        {/* Rename batch inline */}
+        {selectedBatch && renamingBatch !== selectedBatch && (
+          <button
+            onClick={() => {
+              setRenamingBatch(selectedBatch);
+              const batch = batches.find((b) => b.id === selectedBatch);
+              setRenameValue(batch?.name || "");
+            }}
+            className="p-2 rounded-lg btn-secondary flex items-center gap-1.5 text-xs"
+            title="Rename this batch"
+          >
+            <Pencil size={13} />
+            Rename
+          </button>
+        )}
+        {renamingBatch === selectedBatch && selectedBatch && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRenameBatch(selectedBatch);
+                if (e.key === "Escape") { setRenamingBatch(null); setRenameValue(""); }
+              }}
+              autoFocus
+              className="px-2.5 py-1.5 rounded-lg text-sm w-52"
+              placeholder="New batch name"
+            />
+            <button
+              onClick={() => handleRenameBatch(selectedBatch)}
+              disabled={!renameValue.trim()}
+              className="p-1.5 rounded-lg text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-30"
+              title="Save"
+            >
+              <Check size={16} />
+            </button>
+            <button
+              onClick={() => { setRenamingBatch(null); setRenameValue(""); }}
+              className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-all"
+              title="Cancel"
+            >
+              <XCircle size={16} />
+            </button>
+          </div>
+        )}
+
         <select
           value={statusFilter}
           onChange={(e) => {
