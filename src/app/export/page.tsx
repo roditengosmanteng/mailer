@@ -88,10 +88,30 @@ export default function ExportPage() {
     params.set("delimiter", delimiter);
     params.set("columns", Array.from(selectedColumns).join(","));
 
-    // Direct download — the API returns Content-Disposition: attachment
-    // so the browser downloads it as a .csv file to the Downloads folder
-    window.location.href = `/api/emails/export?${params}`;
-    addToast("Export download started", "success");
+    try {
+      const res = await fetch(`/api/emails/export?${params}`);
+      // Extract filename from Content-Disposition header
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] || `export_${new Date().toISOString().split("T")[0]}.csv`;
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename; // forces browser to download as this filename
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      // Cleanup after a short delay to ensure download starts
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 500);
+      addToast(`Downloaded ${filename}`, "success");
+    } catch {
+      addToast("Export failed", "error");
+    }
     setLoading(false);
   };
 
