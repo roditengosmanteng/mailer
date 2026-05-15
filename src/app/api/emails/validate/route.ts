@@ -30,33 +30,42 @@ export async function POST(request: Request) {
     }
 
     const results = [];
+    const CHUNK_SIZE = 10;
 
-    for (const email of emails) {
-      await prisma.email.update({
-        where: { id: email.id },
+    for (let i = 0; i < emails.length; i += CHUNK_SIZE) {
+      const chunk = emails.slice(i, i + CHUNK_SIZE);
+      
+      // Update statuses to validating
+      await prisma.email.updateMany({
+        where: { id: { in: chunk.map(e => e.id) } },
         data: { status: "validating" },
       });
 
-      const domain = email.domain || email.address.split("@")[1];
-      const mxValid = await validateMX(domain);
-      let smtpValid: boolean | null = null;
+      // Process chunk concurrently
+      const chunkResults = await Promise.all(
+        chunk.map(async (email) => {
+          const domain = email.domain || email.address.split("@")[1];
+          const mxValid = await validateMX(domain);
+          let smtpValid: boolean | null = null;
 
-      if (mxValid) {
-        smtpValid = await validateSMTP(email.address, domain);
-      }
+          if (mxValid) {
+            smtpValid = await validateSMTP(email.address, domain);
+          }
 
-      // MX validity is the primary signal. SMTP (port 25 RCPT TO) is unreliable —
-      // many government/corporate mail servers block probe connections as anti-spam,
-      // causing false negatives for valid emails. SMTP result is stored in smtpValid
-      // field for reference but doesn't downgrade the status.
-      const status = mxValid ? "valid" : "invalid";
+          // MX validity is the primary signal. SMTP (port 25 RCPT TO) is unreliable —
+          // many government/corporate mail servers block probe connections as anti-spam,
+          // causing false negatives for valid emails. SMTP result is stored in smtpValid
+          // field for reference but doesn't downgrade the status.
+          const status = mxValid ? "valid" : "invalid";
 
-      const updated = await prisma.email.update({
-        where: { id: email.id },
-        data: { mxValid, smtpValid, status },
-      });
+          return prisma.email.update({
+            where: { id: email.id },
+            data: { mxValid, smtpValid, status },
+          });
+        })
+      );
 
-      results.push(updated);
+      results.push(...chunkResults);
     }
 
     if (batchId) {
