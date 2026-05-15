@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Email {
+  id              String   @id @default(uuid())
+  address         String
+  name            String?
+  organization    String?
+  domain          String?
+  syntaxValid     Boolean  @default(false)
+  mxValid         Boolean?
+  smtpValid       Boolean?
+  aiVerified      Boolean?
+  aiScore         Float?
+  aiSearchResult  String?
+  status          String   @default("pending") // pending, validating, valid, invalid, bounced
+  source          String   @default("import") // import, scrape
+  batchId         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  batch ImportBatch? @relation(fields: [batchId], references: [id])
+
+  @@unique([address, batchId])
+}
+
+model ImportBatch {
+  id          String   @id @default(uuid())
+  name        String
+  fileName    String?
+  totalCount  Int      @default(0)
+  validCount  Int      @default(0)
+  invalidCount Int     @default(0)
+  pendingCount Int     @default(0)
+  status      String   @default("pending") // pending, processing, completed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  emails Email[]
+}
+
+model AIProvider {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // openai, google, anthropic, custom
+  apiKey    String
+  model     String
+  baseUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ScrapeJob {
+  id             String   @id @default(uuid())
+  targetOrg      String
+  targetUrl      String?
+  aiProviderId   String?
+  status         String   @default("pending") // pending, running, completed, failed
+  emailsFound    Int      @default(0)
+  results        String?  // JSON string of results
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
