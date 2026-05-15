@@ -85,6 +85,30 @@ export async function GET(request: NextRequest) {
     orderBy: [{ aiScore: "desc" }, { createdAt: "desc" }],
   });
 
+  // Build dynamic filename: BATCHNAME_STATUS_DATE_TOTALCOUNT.csv
+  let batchLabel = "ALL";
+  if (batchId) {
+    const batch = await prisma.importBatch.findUnique({
+      where: { id: batchId },
+      select: { name: true },
+    });
+    if (batch?.name) {
+      // Sanitize: uppercase, replace spaces/special chars with underscores
+      batchLabel = batch.name
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "_")
+        .replace(/^_|_$/g, "");
+    }
+  }
+
+  const statusLabel = (status === "all" ? "ALL" : status).toUpperCase();
+  const dateLabel = new Date()
+    .toISOString()
+    .split("T")[0]
+    .replace(/-/g, "");
+  const totalCount = emails.length;
+  const filename = `${batchLabel}_${statusLabel}_${dateLabel}_${totalCount}.csv`;
+
   const csvHeader = columns.join(delimiter);
   const csvRows = emails.map((e) =>
     columns
@@ -94,12 +118,14 @@ export async function GET(request: NextRequest) {
       .join(delimiter)
   );
 
-  const csv = [csvHeader, ...csvRows].join("\n");
+  // UTF-8 BOM for Excel compatibility
+  const bom = "\uFEFF";
+  const csv = bom + [csvHeader, ...csvRows].join("\n");
 
   return new Response(csv, {
     headers: {
-      "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="verified-emails-${new Date().toISOString().split("T")[0]}.csv"`,
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
 }
