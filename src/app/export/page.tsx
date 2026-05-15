@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
-import { Download, Filter, FileDown, Database } from "lucide-react";
+import { Download, Filter, FileDown, Database, Columns3 } from "lucide-react";
 import { useToast } from "@/components/toast-provider";
 
 interface Batch {
@@ -12,12 +12,30 @@ interface Batch {
   validCount: number;
 }
 
+const AVAILABLE_COLUMNS = [
+  { key: "email", label: "Email Address" },
+  { key: "name", label: "Name" },
+  { key: "organization", label: "Organization" },
+  { key: "domain", label: "Domain" },
+  { key: "syntax_valid", label: "Syntax Valid" },
+  { key: "mx_valid", label: "MX Valid" },
+  { key: "smtp_valid", label: "SMTP Valid" },
+  { key: "ai_verified", label: "AI Verified" },
+  { key: "ai_score", label: "AI Score" },
+  { key: "status", label: "Status" },
+  { key: "source", label: "Source" },
+];
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function ExportPage() {
   const [selectedBatch, setSelectedBatch] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("valid");
   const [minScore, setMinScore] = useState<string>("0");
+  const [delimiter, setDelimiter] = useState<"," | ";">(",");
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(
+    new Set(AVAILABLE_COLUMNS.map((c) => c.key))
+  );
   const [loading, setLoading] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -41,6 +59,25 @@ export default function ExportPage() {
     fetchPreview();
   }, [selectedBatch, statusFilter]);
 
+  const toggleColumn = (key: string) => {
+    const next = new Set(selectedColumns);
+    if (next.has(key)) {
+      if (next.size === 1) return; // must have at least 1 column
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    setSelectedColumns(next);
+  };
+
+  const selectAllColumns = () => {
+    setSelectedColumns(new Set(AVAILABLE_COLUMNS.map((c) => c.key)));
+  };
+
+  const selectEmailOnly = () => {
+    setSelectedColumns(new Set(["email"]));
+  };
+
   const handleExport = async () => {
     setLoading(true);
     try {
@@ -49,6 +86,8 @@ export default function ExportPage() {
       if (statusFilter) params.set("status", statusFilter);
       if (minScore && parseFloat(minScore) > 0)
         params.set("minScore", minScore);
+      params.set("delimiter", delimiter);
+      params.set("columns", Array.from(selectedColumns).join(","));
 
       const res = await fetch(`/api/emails/export?${params}`);
       const blob = await res.blob();
@@ -136,9 +175,86 @@ export default function ExportPage() {
               0 = no filter, 0.7 = high confidence only
             </p>
           </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+              CSV Delimiter
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDelimiter(",")}
+                className={`flex-1 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  delimiter === ","
+                    ? "btn-primary"
+                    : "btn-secondary"
+                }`}
+              >
+                Comma ( , )
+              </button>
+              <button
+                onClick={() => setDelimiter(";")}
+                className={`flex-1 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  delimiter === ";"
+                    ? "btn-primary"
+                    : "btn-secondary"
+                }`}
+              >
+                Semicolon ( ; )
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Preview count */}
+        {/* Column Picker */}
+        <div className="p-4 rounded-xl bg-[var(--secondary)] border border-[var(--border)]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Columns3 size={14} className="text-[var(--primary-light)]" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                CSV Columns
+              </h3>
+              <span className="badge badge-info">
+                {selectedColumns.size} / {AVAILABLE_COLUMNS.length}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={selectEmailOnly}
+                className="text-[11px] font-medium text-[var(--primary-light)] hover:underline"
+              >
+                Email only
+              </button>
+              <span className="text-[var(--muted-foreground)]">·</span>
+              <button
+                onClick={selectAllColumns}
+                className="text-[11px] font-medium text-[var(--primary-light)] hover:underline"
+              >
+                Select all
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {AVAILABLE_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all ${
+                  selectedColumns.has(col.key)
+                    ? "bg-[var(--accent)] border border-[var(--border-bright)]"
+                    : "hover:bg-[var(--accent)] border border-transparent"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedColumns.has(col.key)}
+                  onChange={() => toggleColumn(col.key)}
+                />
+                <span className="text-sm">{col.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Preview */}
         <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--secondary)] border border-[var(--border)]">
           <Database size={18} className="text-[var(--primary-light)]" />
           <div className="flex-1">
@@ -148,21 +264,25 @@ export default function ExportPage() {
               ) : (
                 <>
                   <span className="text-[var(--primary-light)] font-bold">{previewCount ?? 0}</span>
-                  <span className="text-[var(--muted-foreground)]"> emails match your filters</span>
+                  <span className="text-[var(--muted-foreground)]"> emails × </span>
+                  <span className="text-[var(--primary-light)] font-bold">{selectedColumns.size}</span>
+                  <span className="text-[var(--muted-foreground)]"> columns</span>
                 </>
               )}
             </p>
           </div>
         </div>
 
+        {/* Preview header row */}
         <div className="p-4 rounded-xl bg-[var(--secondary)] border border-[var(--border)]">
           <div className="flex items-center gap-2 mb-2">
             <FileDown size={14} className="text-[var(--muted-foreground)]" />
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">CSV Columns</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              Header Preview
+            </h3>
           </div>
-          <p className="text-xs text-[var(--muted-foreground)] font-mono">
-            email, name, organization, domain, syntax_valid, mx_valid,
-            smtp_valid, ai_verified, ai_score, status, source
+          <p className="text-xs text-[var(--primary-light)] font-mono break-all">
+            {Array.from(selectedColumns).join(delimiter === "," ? ", " : "; ")}
           </p>
         </div>
 
