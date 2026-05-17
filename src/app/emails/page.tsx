@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
@@ -48,7 +48,7 @@ interface Batch {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-export default function EmailsPage() {
+function EmailsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -62,11 +62,11 @@ export default function EmailsPage() {
   const [renameValue, setRenameValue] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [validating, setValidating] = useState(false);
   const [aiValidating, setAiValidating] = useState(false);
   const { addToast } = useToast();
   const { confirm, dialogProps } = useConfirmDialog();
-
   // Helper to update URL params
   const updateParams = useCallback(
     (updates: Record<string, string | number>) => {
@@ -128,6 +128,12 @@ export default function EmailsPage() {
   };
 
   const emails = emailData?.emails ?? [];
+
+  // Reset shift-selection starting index when the email list changes
+  useEffect(() => {
+    setLastSelectedIndex(null);
+  }, [emails]);
+
   const totalPages = emailData?.pagination?.totalPages ?? 1;
   const totalEmails = emailData?.pagination?.total ?? 0;
   const batches = batchData?.batches ?? [];
@@ -202,14 +208,38 @@ export default function EmailsPage() {
     mutateEmails();
   };
 
-  const toggleSelect = (id: string) => {
-    const next = new Set(selectedEmails);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedEmails(next);
+  const toggleSelect = (id: string, index: number, shiftKey: boolean) => {
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      const isChecking = !prev.has(id);
+
+      if (shiftKey && lastSelectedIndex !== null && lastSelectedIndex < emails.length && emails.length > 0) {
+        const start = Math.min(lastSelectedIndex, index);
+        const end = Math.max(lastSelectedIndex, index);
+        
+        for (let i = start; i <= end; i++) {
+          const targetId = emails[i].id;
+          if (isChecking) {
+            next.add(targetId);
+          } else {
+            next.delete(targetId);
+          }
+        }
+      } else {
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      
+      setLastSelectedIndex(index);
+      return next;
+    });
   };
 
   const toggleSelectAll = () => {
+    setLastSelectedIndex(null);
     if (selectedEmails.size === emails.length) {
       setSelectedEmails(new Set());
     } else {
@@ -221,6 +251,8 @@ export default function EmailsPage() {
     switch (status) {
       case "valid":
         return <CheckCircle size={14} className="text-green-400" />;
+      case "catch_all":
+        return <Mail size={14} className="text-sky-400" />;
       case "invalid":
       case "bounced":
         return <XCircle size={14} className="text-red-400" />;
@@ -235,6 +267,8 @@ export default function EmailsPage() {
     switch (status) {
       case "valid":
         return "badge-success";
+      case "catch_all":
+        return "bg-sky-500/10 text-sky-400 border border-sky-500/20";
       case "invalid":
       case "bounced":
         return "badge-error";
@@ -368,6 +402,7 @@ export default function EmailsPage() {
           <option value="">All Status</option>
           <option value="pending">Pending</option>
           <option value="valid">Valid</option>
+          <option value="catch_all">Catch-All</option>
           <option value="invalid">Invalid</option>
           <option value="bounced">Bounced</option>
           <option value="validating">Validating</option>
@@ -397,7 +432,7 @@ export default function EmailsPage() {
                 Organization
               </th>
               <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                MX
+                Tiers (T1/T2/T3)
               </th>
               <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                 AI Score
@@ -431,7 +466,7 @@ export default function EmailsPage() {
                 </td>
               </tr>
             ) : (
-              emails.map((email) => (
+              emails.map((email, index) => (
                 <tr
                   key={email.id}
                   className="border-b border-[var(--border)] table-row-hover"
@@ -440,20 +475,71 @@ export default function EmailsPage() {
                     <input
                       type="checkbox"
                       checked={selectedEmails.has(email.id)}
-                      onChange={() => toggleSelect(email.id)}
+                      onChange={() => {}}
+                      onClick={(e) => toggleSelect(email.id, index, e.shiftKey)}
                     />
                   </td>
                   <td className="p-3.5 text-sm font-mono text-[var(--primary-light)]">{email.address}</td>
                   <td className="p-3.5 text-sm">{email.name || <span className="text-[var(--muted-foreground)] opacity-40">—</span>}</td>
                   <td className="p-3.5 text-sm">{email.organization || <span className="text-[var(--muted-foreground)] opacity-40">—</span>}</td>
-                  <td className="p-3.5 text-sm">
-                    {email.mxValid === null ? (
-                      <span className="text-[var(--muted-foreground)] opacity-40">—</span>
-                    ) : email.mxValid ? (
-                      <CheckCircle size={16} className="text-green-400" />
-                    ) : (
-                      <XCircle size={16} className="text-red-400" />
-                    )}
+                  <td className="p-3.5">
+                    <div className="flex items-center gap-1.5">
+                      {/* T1 Syntax */}
+                      <span
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold cursor-help transition-all ${
+                          email.syntaxValid
+                            ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                            : "bg-red-500/10 text-red-400 border border-red-500/20"
+                        }`}
+                        title={email.syntaxValid ? "Tier 1: Syntax Valid (Format correctly matches email pattern)" : "Tier 1: Syntax Invalid"}
+                      >
+                        T1
+                      </span>
+
+                      {/* T2 MX */}
+                      <span
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold cursor-help transition-all ${
+                          email.mxValid === null
+                            ? "bg-slate-500/10 text-slate-400 border border-slate-500/10 opacity-40"
+                            : email.mxValid
+                              ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                              : "bg-red-500/10 text-red-400 border border-red-500/20"
+                        }`}
+                        title={
+                          email.mxValid === null
+                            ? "Tier 2: MX Record Lookup Pending"
+                            : email.mxValid
+                              ? "Tier 2: MX Record Valid (Mail server is active)"
+                              : "Tier 2: MX Record Invalid (No active mail server found)"
+                        }
+                      >
+                        T2
+                      </span>
+
+                      {/* T3 SMTP */}
+                      <span
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold cursor-help transition-all ${
+                          email.smtpValid === null
+                            ? "bg-slate-500/10 text-slate-400 border border-slate-500/10 opacity-40"
+                            : email.smtpValid
+                              ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                              : email.mxValid
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-red-500/10 text-red-400 border border-red-500/20"
+                        }`}
+                        title={
+                          email.smtpValid === null
+                            ? "Tier 3: SMTP Ping Pending"
+                            : email.smtpValid
+                              ? "Tier 3: SMTP Handshake Valid (Mailbox is active & accepts mail)"
+                              : email.mxValid
+                                ? "Tier 3: SMTP Handshake Blocked or Unreliable (Possible Port 25 block by ISP/Server, or Catch-All protection)"
+                                : "Tier 3: SMTP Handshake Failed (No mail server available)"
+                        }
+                      >
+                        T3
+                      </span>
+                    </div>
                   </td>
                   <td className="p-3.5 text-sm">
                     {email.aiScore !== null ? (
@@ -596,5 +682,20 @@ export default function EmailsPage() {
         </span>
       </div>
     </div>
+  );
+}
+
+export default function EmailsPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-2">
+          <RefreshCw size={24} className="text-[var(--primary-light)] animate-spin" />
+          <p>Loading emails database...</p>
+        </div>
+      </div>
+    }>
+      <EmailsContent />
+    </Suspense>
   );
 }

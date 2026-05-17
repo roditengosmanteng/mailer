@@ -15,11 +15,13 @@ export const dynamic = "force-dynamic";
 
 function DonutChart({
   valid,
+  catchAll,
   invalid,
   pending,
   total,
 }: {
   valid: number;
+  catchAll: number;
   invalid: number;
   pending: number;
   total: number;
@@ -38,16 +40,19 @@ function DonutChart({
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const validPct = valid / total;
+  const catchAllPct = catchAll / total;
   const invalidPct = invalid / total;
   const pendingPct = pending / total;
 
   const validDash = validPct * circumference;
+  const catchAllDash = catchAllPct * circumference;
   const invalidDash = invalidPct * circumference;
   const pendingDash = pendingPct * circumference;
 
   const validOffset = 0;
-  const invalidOffset = -(validDash);
-  const pendingOffset = -(validDash + invalidDash);
+  const catchAllOffset = -validDash;
+  const invalidOffset = -(validDash + catchAllDash);
+  const pendingOffset = -(validDash + catchAllDash + invalidDash);
 
   return (
     <div className="relative w-40 h-40 flex items-center justify-center">
@@ -55,7 +60,9 @@ function DonutChart({
         <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--muted)" strokeWidth="12" />
         {validPct > 0 && (
           <circle
-            cx="60" cy="60" r={radius}
+            cx="60"
+            cy="60"
+            r={radius}
             fill="none"
             stroke="#22c55e"
             strokeWidth="12"
@@ -65,9 +72,24 @@ function DonutChart({
             strokeLinecap="round"
           />
         )}
+        {catchAllPct > 0 && (
+          <circle
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="12"
+            strokeDasharray={`${catchAllDash} ${circumference - catchAllDash}`}
+            strokeDashoffset={catchAllOffset}
+            className="donut-segment"
+          />
+        )}
         {invalidPct > 0 && (
           <circle
-            cx="60" cy="60" r={radius}
+            cx="60"
+            cy="60"
+            r={radius}
             fill="none"
             stroke="#ef4444"
             strokeWidth="12"
@@ -78,7 +100,9 @@ function DonutChart({
         )}
         {pendingPct > 0 && (
           <circle
-            cx="60" cy="60" r={radius}
+            cx="60"
+            cy="60"
+            r={radius}
             fill="none"
             stroke="#6366f1"
             strokeWidth="12"
@@ -97,10 +121,11 @@ function DonutChart({
 }
 
 export default async function DashboardPage() {
-  const [totalEmails, validEmails, invalidEmails, pendingEmails, totalBatches, scrapeJobs] =
+  const [totalEmails, validEmails, catchAllEmails, invalidEmails, pendingEmails, totalBatches, scrapeJobs] =
     await Promise.all([
       prisma.email.count(),
       prisma.email.count({ where: { status: "valid" } }),
+      prisma.email.count({ where: { status: "catch_all" } }),
       prisma.email.count({ where: { status: "invalid" } }),
       prisma.email.count({ where: { status: "pending" } }),
       prisma.importBatch.count(),
@@ -128,6 +153,14 @@ export default async function DashboardPage() {
       gradient: "from-green-500/20 to-emerald-500/20",
       iconColor: "text-green-400",
       border: "border-green-500/20",
+    },
+    {
+      label: "Catch-All",
+      value: catchAllEmails,
+      icon: Mail,
+      gradient: "from-sky-500/20 to-cyan-500/20",
+      iconColor: "text-sky-400",
+      border: "border-sky-500/20",
     },
     {
       label: "Invalid",
@@ -175,7 +208,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 stagger-in">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8 stagger-in">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -208,6 +241,7 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-center mb-4">
             <DonutChart
               valid={validEmails}
+              catchAll={catchAllEmails}
               invalid={invalidEmails}
               pending={pendingEmails}
               total={totalEmails}
@@ -220,6 +254,13 @@ export default async function DashboardPage() {
                 <span className="text-[var(--muted-foreground)]">Valid</span>
               </div>
               <span className="font-medium">{validEmails}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                <span className="text-[var(--muted-foreground)]">Catch-All</span>
+              </div>
+              <span className="font-medium">{catchAllEmails}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">

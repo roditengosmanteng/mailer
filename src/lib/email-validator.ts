@@ -4,10 +4,18 @@ import net from "net";
 
 const resolveMx = promisify(dns.resolveMx);
 
+export interface SMTPValidationResult {
+  smtpValid: boolean;
+  isCatchAll: boolean;
+  code?: number;
+  message?: string;
+}
+
 export interface ValidationResult {
   syntaxValid: boolean;
   mxValid: boolean | null;
   smtpValid: boolean | null;
+  isCatchAll: boolean | null;
   name: string | null;
   organization: string | null;
   domain: string | null;
@@ -47,52 +55,90 @@ export async function validateMX(domain: string): Promise<boolean> {
 export async function validateSMTP(
   email: string,
   domain: string
-): Promise<boolean> {
+): Promise<SMTPValidationResult> {
+  const senderDomain = process.env.SENDER_DOMAIN || "mailer.local";
+  const senderEmail = process.env.SENDER_EMAIL || "check@mailer.local";
+
   try {
     const mxRecords = await resolveMx(domain);
-    if (!mxRecords || mxRecords.length === 0) return false;
+    if (!mxRecords || mxRecords.length === 0) {
+      return { smtpValid: false, isCatchAll: false, message: "No MX records found" };
+    }
 
+    // Sort MX by priority (lowest priority value is the primary server)
     const sortedMx = mxRecords.sort((a, b) => a.priority - b.priority);
-    const mxHost = sortedMx[0].exchange;
 
-    return await new Promise<boolean>((resolve) => {
-      const socket = new net.Socket();
-      let step = 0;
-      const timeout = setTimeout(() => {
-        socket.destroy();
-        resolve(false);
-      }, 10000);
-
-      socket.connect(25, mxHost, () => {
-        // connected
-      });
-
-      socket.on("data", (data) => {
-        const response = data.toString();
-        if (step === 0 && response.startsWith("220")) {
-          socket.write(`EHLO mailer.local\r\n`);
-          step++;
-        } else if (step === 1 && response.includes("250")) {
-          socket.write(`MAIL FROM:<check@mailer.local>\r\n`);
-          step++;
-        } else if (step === 2 && response.startsWith("250")) {
-          socket.write(`RCPT TO:<${email}>\r\n`);
-          step++;
-        } else if (step === 3) {
-          socket.write(`QUIT\r\n`);
-          clearTimeout(timeout);
-          resolve(response.startsWith("250"));
+    // Try each MX record in order of priority (Failover Routing)
+    for (const record of sortedMx) {
+      const mxHost = record.exchange;
+      
+      const result = await new Promise<SMTPValidationResult | null>((resolve) => {
+        const socket = new net.Socket();
+        let step = 0;
+        let isCatchAll = false;
+        let smtpValid = false;
+        
+        const timeout = setTimeout(() => {
           socket.destroy();
-        }
+          resolve(null); // Return null on timeout to try the next MX record
+        }, 6000);
+
+        socket.connect(25, mxHost, () => {
+          // Connected to SMTP server
+        });
+
+        socket.on("data", (data) => {
+          const response = data.toString();
+
+          if (step === 0 && response.startsWith("220")) {
+            socket.write(`EHLO ${senderDomain}\r\n`);
+            step++;
+          } else if (step === 1 && response.includes("250")) {
+            socket.write(`MAIL FROM:<${senderEmail}>\r\n`);
+            step++;
+          } else if (step === 2 && response.startsWith("250")) {
+            // TIER 3 CATCH-ALL CHECK: Check a random mailbox that should never exist
+            const randomBox = `antigravity_test_catchall_${Math.floor(Math.random() * 100000)}`;
+            socket.write(`RCPT TO:<${randomBox}@${domain}>\r\n`);
+            step++;
+          } else if (step === 3) {
+            // Read catch-all response (250 = Catch-All Active, any other/550 = No Catch-All)
+            isCatchAll = response.startsWith("250");
+            
+            // Now test the actual recipient email address in the same SMTP session
+            socket.write(`RCPT TO:<${email}>\r\n`);
+            step++;
+          } else if (step === 4) {
+            // Read target email response (250 = Active Mailbox)
+            smtpValid = response.startsWith("250");
+            
+            socket.write(`QUIT\r\n`);
+            step++;
+          } else if (step === 5) {
+            clearTimeout(timeout);
+            resolve({ smtpValid, isCatchAll, message: "Verification complete" });
+            socket.destroy();
+          }
+        });
+
+        socket.on("error", () => {
+          clearTimeout(timeout);
+          resolve(null); // Try next MX server on connection error
+        });
       });
 
-      socket.on("error", () => {
-        clearTimeout(timeout);
-        resolve(false);
-      });
-    });
-  } catch {
-    return false;
+      if (result) {
+        return result; // Successful verification, return result
+      }
+    }
+
+    return { smtpValid: false, isCatchAll: false, message: "All MX servers failed to connect" };
+  } catch (err) {
+    return {
+      smtpValid: false,
+      isCatchAll: false,
+      message: err instanceof Error ? err.message : "Unknown error",
+    };
   }
 }
 
@@ -105,6 +151,7 @@ export async function validateEmail(email: string): Promise<ValidationResult> {
       syntaxValid: false,
       mxValid: null,
       smtpValid: null,
+      isCatchAll: null,
       name: null,
       organization: null,
       domain: null,
@@ -114,17 +161,22 @@ export async function validateEmail(email: string): Promise<ValidationResult> {
   const { name, orgCode, domain } = extractEmailParts(trimmed);
   const mxValid = await validateMX(domain);
   let smtpValid: boolean | null = null;
+  let isCatchAll: boolean | null = null;
 
   if (mxValid) {
-    smtpValid = await validateSMTP(trimmed, domain);
+    const smtpResult = await validateSMTP(trimmed, domain);
+    smtpValid = smtpResult.smtpValid;
+    isCatchAll = smtpResult.isCatchAll;
   }
 
   return {
     syntaxValid,
     mxValid,
     smtpValid,
+    isCatchAll,
     name,
     organization: orgCode,
     domain,
   };
 }
+
