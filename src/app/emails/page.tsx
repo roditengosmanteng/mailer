@@ -128,7 +128,15 @@ function EmailsContent() {
   };
 
   const handleDeleteBatch = async (batchId: string) => {
-    if (!window.confirm("Are you sure you want to delete this batch and all its associated emails? This action cannot be undone.")) return;
+    const isConfirmed = await confirm({
+      title: "Delete Batch",
+      message: "Are you sure you want to delete this batch and all its emails? This action cannot be undone.",
+      confirmLabel: "Delete Batch",
+      variant: "danger",
+    });
+
+    if (!isConfirmed) return;
+
     try {
       const res = await fetch("/api/batches", {
         method: "DELETE",
