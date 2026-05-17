@@ -8,29 +8,20 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploying application to VPS
+      - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          host: 92.113.149.184
+          username: mrbro
+          password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            echo "Starting deployment to VPS..."
-            
             cd /var/www/mailer
-            
-            git pull origin beta
-            
+            git fetch --all
+            git reset --hard origin/beta
             npm install
-            
             npx prisma generate
             npx prisma db push --accept-data-loss
-            
             npm run build
-            
-            pm2 startOrRestart ecosystem.config.js
-            
-            echo "Deployment successful!"
+            pm2 restart mailer --update-env
+            pm2 save
