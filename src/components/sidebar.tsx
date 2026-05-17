@@ -15,6 +15,7 @@ import {
   Users,
   LogOut,
   Shield,
+  X,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -44,7 +45,7 @@ const adminItems: NavItem[] = [
   { href: "/admin/users", label: "Manage Users", icon: Users },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { data, error } = useSWR<any>("/api/auth/me", fetcher);
   
@@ -61,8 +62,8 @@ export function Sidebar() {
   const allItems = [...navItems, ...(isAdmin ? adminItems : [])];
 
   return (
-    <aside className="w-64 flex flex-col border-r border-[var(--border)]" style={{ background: "var(--gradient-sidebar)" }}>
-      <div className="p-6 border-b border-[var(--border)]">
+    <aside className="w-64 h-full flex flex-col border-r border-[var(--border)]" style={{ background: "var(--gradient-sidebar)" }}>
+      <div className="p-6 border-b border-[var(--border)] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-primary)" }}>
             <Zap size={18} className="text-white" />
@@ -76,6 +77,14 @@ export function Sidebar() {
             </p>
           </div>
         </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="md:hidden p-1 rounded-lg hover:bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
         {allItems.map((item) => {
@@ -90,6 +99,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => onClose?.()}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "bg-[var(--accent)] text-[var(--primary-light)] shadow-sm"

@@ -115,7 +115,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto fade-in">
+    <div className="p-5 md:p-8 max-w-3xl mx-auto fade-in">
       <ConfirmDialog {...dialogProps} />
 
       <div className="mb-8">

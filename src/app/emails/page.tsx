@@ -301,7 +301,7 @@ function EmailsContent() {
   };
 
   return (
-    <div className="p-8 fade-in">
+    <div className="p-5 md:p-8 fade-in">
       <ConfirmDialog {...dialogProps} />
 
       <div className="flex items-center justify-between mb-6">

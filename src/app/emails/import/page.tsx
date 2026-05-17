@@ -88,7 +88,7 @@ export default function ImportPage() {
   };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto fade-in">
+    <div className="p-5 md:p-8 max-w-3xl mx-auto fade-in">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
           <Upload size={24} className="text-[var(--primary-light)]" />
