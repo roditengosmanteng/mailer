@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "50");
   const skip = (page - 1) * limit;
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { deletedAt: null };
   if (batchId) where.batchId = batchId;
   if (status) where.status = status;
   // Multi-tenant: scope to current user
@@ -51,7 +51,10 @@ export async function DELETE(request: NextRequest) {
   const where: Record<string, unknown> = { id: { in: ids } };
   if (user) where.userId = user.id;
 
-  await prisma.email.deleteMany({ where });
+  await prisma.email.updateMany({
+    where,
+    data: { deletedAt: new Date() }
+  });
 
   return Response.json({ success: true, deleted: ids.length });
 }

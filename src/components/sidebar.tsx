@@ -16,6 +16,7 @@ import {
   LogOut,
   Shield,
   X,
+  Trash2,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { href: "/emails/import", label: "Import", icon: Upload },
   { href: "/scrape", label: "AI Scraper", icon: Search },
   { href: "/export", label: "Export", icon: Download },
+  { href: "/trash", label: "Trash", icon: Trash2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

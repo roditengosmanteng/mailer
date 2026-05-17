@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     let emails;
     if (emailIds && Array.isArray(emailIds)) {
       emails = await prisma.email.findMany({
-        where: { id: { in: emailIds } },
+        where: { id: { in: emailIds }, deletedAt: null },
       });
     } else if (batchId) {
       emails = await prisma.email.findMany({
@@ -16,6 +16,7 @@ export async function POST(request: Request) {
           batchId,
           syntaxValid: true,
           status: { in: ["valid", "pending"] },
+          deletedAt: null,
         },
       });
     } else {

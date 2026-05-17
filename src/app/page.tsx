@@ -125,20 +125,21 @@ export default async function DashboardPage() {
   const session = await getSession();
   const userId = session?.userId;
   const userFilter = userId ? { userId } : {};
+  const activeFilter = { ...userFilter, deletedAt: null };
 
   const [totalEmails, validEmails, catchAllEmails, invalidEmails, pendingEmails, totalBatches, scrapeJobs] =
     await Promise.all([
-      prisma.email.count({ where: { ...userFilter } }),
-      prisma.email.count({ where: { status: "valid", ...userFilter } }),
-      prisma.email.count({ where: { status: "catch_all", ...userFilter } }),
-      prisma.email.count({ where: { status: "invalid", ...userFilter } }),
-      prisma.email.count({ where: { status: "pending", ...userFilter } }),
-      prisma.importBatch.count({ where: { ...userFilter } }),
-      prisma.scrapeJob.count({ where: { ...userFilter } }),
+      prisma.email.count({ where: activeFilter }),
+      prisma.email.count({ where: { status: "valid", ...activeFilter } }),
+      prisma.email.count({ where: { status: "catch_all", ...activeFilter } }),
+      prisma.email.count({ where: { status: "invalid", ...activeFilter } }),
+      prisma.email.count({ where: { status: "pending", ...activeFilter } }),
+      prisma.importBatch.count({ where: activeFilter }),
+      prisma.scrapeJob.count({ where: userFilter }),
     ]);
 
   const recentBatches = await prisma.importBatch.findMany({
-    where: { ...userFilter },
+    where: activeFilter,
     orderBy: { createdAt: "desc" },
     take: 5,
     include: {

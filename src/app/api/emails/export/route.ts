@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     columns = [...ALL_COLUMNS];
   }
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { deletedAt: null };
   if (batchId) where.batchId = batchId;
   if (status !== "all") where.status = status;
   if (minScore > 0) where.aiScore = { gte: minScore };

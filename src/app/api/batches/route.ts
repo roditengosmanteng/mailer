@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 export async function GET() {
   const user = await getCurrentUser();
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { deletedAt: null };
   if (user) where.userId = user.id;
 
   const batches = await prisma.importBatch.findMany({
@@ -74,8 +74,14 @@ export async function DELETE(request: Request) {
       return Response.json({ error: "Batch not found" }, { status: 404 });
     }
 
-    await prisma.email.deleteMany({ where: { batchId: id } });
-    await prisma.importBatch.delete({ where: { id } });
+    await prisma.email.updateMany({
+      where: { batchId: id, deletedAt: null },
+      data: { deletedAt: new Date() }
+    });
+    await prisma.importBatch.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
 
     return Response.json({ success: true });
   } catch (error) {

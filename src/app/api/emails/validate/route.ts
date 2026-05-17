@@ -8,15 +8,15 @@ export async function POST(request: Request) {
     let emails;
     if (emailIds && Array.isArray(emailIds)) {
       emails = await prisma.email.findMany({
-        where: { id: { in: emailIds }, syntaxValid: true },
+        where: { id: { in: emailIds }, syntaxValid: true, deletedAt: null },
       });
     } else if (batchId) {
       emails = await prisma.email.findMany({
-        where: { batchId, syntaxValid: true, status: "pending" },
+        where: { batchId, syntaxValid: true, status: "pending", deletedAt: null },
       });
     } else {
       emails = await prisma.email.findMany({
-        where: { syntaxValid: true, status: "pending" },
+        where: { syntaxValid: true, status: "pending", deletedAt: null },
         take: 100,
       });
     }
