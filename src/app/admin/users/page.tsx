@@ -33,6 +33,7 @@ interface User {
 
 export default function AdminUsersPage() {
   const { data, mutate } = useSWR<{ users: User[] }>("/api/users", fetcher);
+  const { data: authData } = useSWR<{ user: { id: string } }>("/api/auth/me", fetcher);
   const { addToast } = useToast();
   const { confirm, dialogProps } = useConfirmDialog();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -41,6 +42,7 @@ export default function AdminUsersPage() {
   const [resetting, setResetting] = useState(false);
 
   const users = data?.users ?? [];
+  const currentUserId = authData?.user?.id;
 
   const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -154,264 +156,277 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="p-8 fade-in">
-      <ConfirmDialog {...dialogProps} />
+    <>
+      <div className="p-8 fade-in">
+        <ConfirmDialog {...dialogProps} />
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Users size={24} className="text-[var(--primary-light)]" />
-            <h1 className="text-2xl font-bold">Manage Users</h1>
-            <span className="badge badge-info">{users.length} users</span>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <Users size={24} className="text-[var(--primary-light)]" />
+              <h1 className="text-2xl font-bold">Manage Users</h1>
+              <span className="badge badge-info">{users.length} users</span>
+            </div>
+            <p className="text-[var(--muted-foreground)] ml-9">
+              Create and manage user accounts for your team
+            </p>
           </div>
-          <p className="text-[var(--muted-foreground)] ml-9">
-            Create and manage user accounts for your team
-          </p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 rounded-lg text-sm font-medium btn-primary flex items-center gap-2"
+          >
+            <UserPlus size={16} />
+            Add New User
+          </button>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 rounded-lg text-sm font-medium btn-primary flex items-center gap-2"
-        >
-          <UserPlus size={16} />
-          Add New User
-        </button>
-      </div>
 
-      {/* Users Table */}
-      <div className="glass-card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-[var(--border)]">
-              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                User
-              </th>
-              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                Role
-              </th>
-              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                Status
-              </th>
-              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                Data
-              </th>
-              <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                Created
-              </th>
-              <th className="p-3.5 text-right text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-12 text-center">
-                  <Users size={32} className="mx-auto text-[var(--muted-foreground)] opacity-30 mb-3" />
-                  <p className="text-sm text-[var(--muted-foreground)]">No users found. Create the first admin account.</p>
-                </td>
+        {/* Users Table */}
+        <div className="glass-card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-[var(--border)]">
+                <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  User
+                </th>
+                <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  Data
+                </th>
+                <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  Created
+                </th>
+                <th className="p-3.5 text-right text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user.id} className="border-b border-[var(--border)] table-row-hover">
-                  <td className="p-3.5">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
-                        style={{
-                          background: user.role === "admin"
-                            ? "linear-gradient(135deg, #f59e0b, #ef4444)"
-                            : "var(--gradient-primary)",
-                          opacity: user.isActive ? 1 : 0.4,
-                        }}
-                      >
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-medium ${!user.isActive ? "opacity-50" : ""}`}>
-                          {user.name}
-                        </p>
-                        <p className="text-xs text-[var(--muted-foreground)]">{user.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-3.5">
-                    <span
-                      className={`badge ${
-                        user.role === "admin"
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          : "badge-info"
-                      }`}
-                    >
-                      {user.role === "admin" ? (
-                        <ShieldCheck size={12} />
-                      ) : (
-                        <Shield size={12} />
-                      )}
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="p-3.5">
-                    <span className={`badge ${user.isActive ? "badge-success" : "badge-error"}`}>
-                      {user.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="p-3.5 text-sm">
-                    <div className="flex items-center gap-3 text-[var(--muted-foreground)]">
-                      <span className="flex items-center gap-1">
-                        <Mail size={12} />
-                        {user._count.emails}
-                      </span>
-                      <span className="text-xs">|</span>
-                      <span>{user._count.batches} batches</span>
-                    </div>
-                  </td>
-                  <td className="p-3.5 text-sm text-[var(--muted-foreground)]">
-                    {new Date(user.createdAt).toLocaleDateString("en-GB", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="p-3.5">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button
-                        onClick={() => setResetPasswordUserId(user.id)}
-                        className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-all"
-                        title="Reset password"
-                      >
-                        <KeyRound size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleToggleActive(user)}
-                        className={`p-2 rounded-lg transition-all ${
-                          user.isActive
-                            ? "text-green-400 hover:text-amber-400 hover:bg-amber-500/10"
-                            : "text-[var(--muted-foreground)] hover:text-green-400 hover:bg-green-500/10"
-                        }`}
-                        title={user.isActive ? "Deactivate user" : "Activate user"}
-                      >
-                        {user.isActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user)}
-                        className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-12 text-center">
+                    <Users size={32} className="mx-auto text-[var(--muted-foreground)] opacity-30 mb-3" />
+                    <p className="text-sm text-[var(--muted-foreground)]">No users found. Create the first admin account.</p>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                users.map((user) => (
+                  <tr key={user.id} className="border-b border-[var(--border)] table-row-hover">
+                    <td className="p-3.5">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                          style={{
+                            background: user.role === "admin"
+                              ? "linear-gradient(135deg, #f59e0b, #ef4444)"
+                              : "var(--gradient-primary)",
+                            opacity: user.isActive ? 1 : 0.4,
+                          }}
+                        >
+                          {user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className={`text-sm font-medium ${!user.isActive ? "opacity-50" : ""}`}>
+                            {user.name}
+                          </p>
+                          <p className="text-xs text-[var(--muted-foreground)]">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3.5">
+                      <span
+                        className={`badge ${
+                          user.role === "admin"
+                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                            : "badge-info"
+                        }`}
+                      >
+                        {user.role === "admin" ? (
+                          <ShieldCheck size={12} />
+                        ) : (
+                          <Shield size={12} />
+                        )}
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="p-3.5">
+                      <span className={`badge ${user.isActive ? "badge-success" : "badge-error"}`}>
+                        {user.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-sm">
+                      <div className="flex items-center gap-3 text-[var(--muted-foreground)]">
+                        <span className="flex items-center gap-1">
+                          <Mail size={12} />
+                          {user._count.emails}
+                        </span>
+                        <span className="text-xs">|</span>
+                        <span>{user._count.batches} batches</span>
+                      </div>
+                    </td>
+                    <td className="p-3.5 text-sm text-[var(--muted-foreground)]">
+                      {new Date(user.createdAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="p-3.5">
+                      <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => setResetPasswordUserId(user.id)}
+                          className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-all"
+                          title="Reset password"
+                        >
+                          <KeyRound size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(user)}
+                          disabled={user.id === currentUserId}
+                          className={`p-2 rounded-lg transition-all ${
+                            user.id === currentUserId 
+                              ? "opacity-30 cursor-not-allowed" 
+                              : user.isActive
+                                ? "text-green-400 hover:text-amber-400 hover:bg-amber-500/10"
+                                : "text-[var(--muted-foreground)] hover:text-green-400 hover:bg-green-500/10"
+                          }`}
+                          title={user.id === currentUserId ? "Cannot deactivate yourself" : (user.isActive ? "Deactivate user" : "Activate user")}
+                        >
+                          {user.isActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user)}
+                          disabled={user.id === currentUserId}
+                          className={`p-2 rounded-lg transition-all ${
+                            user.id === currentUserId
+                              ? "opacity-30 cursor-not-allowed text-[var(--muted-foreground)]"
+                              : "text-[var(--muted-foreground)] hover:text-red-400 hover:bg-red-500/10"
+                          }`}
+                          title={user.id === currentUserId ? "Cannot delete yourself" : "Delete user"}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Create User Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
-          <div className="glass-card w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2">
-                <UserPlus size={20} className="text-[var(--primary-light)]" />
-                <h2 className="text-lg font-bold">Add New User</h2>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-all"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
-                  Full Name
-                </label>
-                <input
-                  name="name"
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="Ahmad Hafiz"
-                  className="w-full px-3.5 py-2.5 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
-                  Email Address
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="ahmad@company.com"
-                  className="w-full px-3.5 py-2.5 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
-                  Password
-                </label>
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  minLength={6}
-                  placeholder="Min 6 characters"
-                  className="w-full px-3.5 py-2.5 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
-                  Role
-                </label>
-                <select name="role" className="w-full px-3.5 py-2.5 rounded-lg text-sm">
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-
-              <div className="p-3 rounded-lg text-xs text-[var(--muted-foreground)]"
-                style={{ background: "rgba(99, 102, 241, 0.06)", border: "1px solid var(--border)" }}>
-                <AlertCircle size={12} className="inline mr-1.5 text-[var(--primary-light)]" />
-                Users will only see their own data (emails, batches, scrape jobs). Admin users can manage all accounts.
-              </div>
-
-              <div className="flex gap-2 pt-1">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 fade-in overflow-y-auto">
+          <div className="flex min-h-full items-start justify-center p-4 pt-16 sm:p-8 sm:pt-24">
+            <div className="glass-card w-full max-w-md p-6 relative">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <UserPlus size={20} className="text-[var(--primary-light)]" />
+                  <h2 className="text-lg font-bold">Add New User</h2>
+                </div>
                 <button
-                  type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-medium btn-secondary"
+                  className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-all"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-medium btn-primary flex items-center justify-center gap-2"
-                >
-                  {creating ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create User"
-                  )}
+                  <X size={16} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleCreateUser} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
+                    Full Name
+                  </label>
+                  <input
+                    name="name"
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Ahmad Hafiz"
+                    className="w-full px-3.5 py-2.5 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
+                    Email Address
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    placeholder="ahmad@company.com"
+                    className="w-full px-3.5 py-2.5 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Min 6 characters"
+                    className="w-full px-3.5 py-2.5 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
+                    Role
+                  </label>
+                  <select name="role" className="w-full px-3.5 py-2.5 rounded-lg text-sm">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+
+                <div className="p-3 rounded-lg text-xs text-[var(--muted-foreground)]"
+                  style={{ background: "rgba(99, 102, 241, 0.06)", border: "1px solid var(--border)" }}>
+                  <AlertCircle size={12} className="inline mr-1.5 text-[var(--primary-light)]" />
+                  Users will only see their own data (emails, batches, scrape jobs). Admin users can manage all accounts.
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 py-2.5 rounded-lg text-sm font-medium btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="flex-1 py-2.5 rounded-lg text-sm font-medium btn-primary flex items-center justify-center gap-2"
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create User"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* Reset Password Modal */}
       {resetPasswordUserId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 fade-in">
-          <div className="glass-card w-full max-w-sm mx-4 p-6">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 fade-in overflow-y-auto">
+          <div className="flex min-h-full items-start justify-center p-4 pt-16 sm:p-8 sm:pt-24">
+            <div className="glass-card w-full max-w-sm p-6 relative">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <KeyRound size={20} className="text-amber-400" />
@@ -466,8 +481,9 @@ export default function AdminUsersPage() {
               </div>
             </form>
           </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

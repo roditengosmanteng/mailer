@@ -127,6 +127,27 @@ function EmailsContent() {
     setRenameValue("");
   };
 
+  const handleDeleteBatch = async (batchId: string) => {
+    if (!window.confirm("Are you sure you want to delete this batch and all its associated emails? This action cannot be undone.")) return;
+    try {
+      const res = await fetch("/api/batches", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: batchId }),
+      });
+      if (res.ok) {
+        addToast("Batch deleted successfully", "success");
+        if (selectedBatch === batchId) setSelectedBatch("");
+        mutateBatches();
+        mutateEmails();
+      } else {
+        addToast("Failed to delete batch", "error");
+      }
+    } catch {
+      addToast("Failed to delete batch", "error");
+    }
+  };
+
   const emails = emailData?.emails ?? [];
 
   // Reset shift-selection starting index when the email list changes
@@ -357,6 +378,16 @@ function EmailsContent() {
           >
             <Pencil size={13} />
             Rename
+          </button>
+        )}
+        {selectedBatch && renamingBatch !== selectedBatch && (
+          <button
+            onClick={() => handleDeleteBatch(selectedBatch)}
+            className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center gap-1.5 text-xs transition-colors"
+            title="Delete this batch"
+          >
+            <Trash2 size={13} />
+            Delete
           </button>
         )}
         {renamingBatch === selectedBatch && selectedBatch && (

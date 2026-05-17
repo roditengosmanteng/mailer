@@ -17,7 +17,12 @@ export async function GET() {
     },
   });
 
-  return Response.json({ batches });
+  return Response.json({
+    batches: batches.map(b => ({
+      ...b,
+      totalCount: b._count.emails
+    }))
+  });
 }
 
 export async function PATCH(request: Request) {

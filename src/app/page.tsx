@@ -141,6 +141,11 @@ export default async function DashboardPage() {
     where: { ...userFilter },
     orderBy: { createdAt: "desc" },
     take: 5,
+    include: {
+      _count: {
+        select: { emails: true },
+      },
+    },
   });
 
   const stats = [
@@ -364,7 +369,7 @@ export default async function DashboardPage() {
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{batch.name}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      {batch.totalCount} emails ·{" "}
+                      {batch._count.emails} emails ·{" "}
                       {new Date(batch.createdAt).toLocaleDateString()}
                     </p>
                   </div>

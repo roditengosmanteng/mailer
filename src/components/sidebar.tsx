@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
@@ -45,7 +46,15 @@ const adminItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { data } = useSWR<UserData>("/api/auth/me", fetcher);
+  const { data, error } = useSWR<any>("/api/auth/me", fetcher);
+  
+  // Auto-logout if session is invalid or user is deactivated
+  useEffect(() => {
+    if (error || (data && !data.user)) {
+      logout();
+    }
+  }, [data, error]);
+
   const user = data?.user;
   const isAdmin = user?.role === "admin";
 
@@ -116,15 +125,18 @@ export function Sidebar() {
               <span className={`badge text-[10px] ${isAdmin ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "badge-info"}`}>
                 {isAdmin ? "Admin" : "User"}
               </span>
-              <form action={logout} className="ml-auto">
+              <div className="ml-auto">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={async () => {
+                    await logout();
+                  }}
                   className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-red-400 hover:bg-red-500/10 transition-all"
                   title="Sign out"
                 >
                   <LogOut size={14} />
                 </button>
-              </form>
+              </div>
             </div>
           </div>
         )}

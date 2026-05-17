@@ -3,11 +3,8 @@ import { requireAdmin } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
-  try {
-    await requireAdmin();
-  } catch (res) {
-    return res as Response;
-  }
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -28,11 +25,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
-    await requireAdmin();
-  } catch (res) {
-    return res as Response;
-  }
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
 
   try {
     const { name, email, password, role } = await request.json();
@@ -93,11 +87,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  try {
-    await requireAdmin();
-  } catch (res) {
-    return res as Response;
-  }
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
 
   try {
     const { id, name, email, password, role, isActive } = await request.json();
@@ -147,11 +138,8 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  try {
-    await requireAdmin();
-  } catch (res) {
-    return res as Response;
-  }
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
 
   try {
     const { id } = await request.json();

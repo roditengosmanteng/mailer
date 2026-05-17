@@ -28,30 +28,37 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
 /**
  * Require authentication for an API route.
- * Returns the user or throws a 401 Response.
+ * Returns { user } on success, or { error: Response } on failure.
  */
-export async function requireAuth(): Promise<AuthUser> {
+export async function requireAuth(): Promise<
+  { user: AuthUser; error?: never } | { user?: never; error: Response }
+> {
   const user = await getCurrentUser();
   if (!user) {
-    throw new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return {
+      error: Response.json({ error: "Unauthorized" }, { status: 401 }),
+    };
   }
-  return user;
+  return { user };
 }
 
 /**
  * Require admin role for an API route.
- * Returns the user or throws a 403 Response.
+ * Returns { user } on success, or { error: Response } on failure.
  */
-export async function requireAdmin(): Promise<AuthUser> {
-  const user = await requireAuth();
-  if (user.role !== "admin") {
-    throw new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json" },
-    });
+export async function requireAdmin(): Promise<
+  { user: AuthUser; error?: never } | { user?: never; error: Response }
+> {
+  const result = await requireAuth();
+  if (result.error) return result;
+
+  if (result.user.role !== "admin") {
+    return {
+      error: Response.json(
+        { error: "Forbidden: Admin access required" },
+        { status: 403 }
+      ),
+    };
   }
-  return user;
+  return { user: result.user };
 }
