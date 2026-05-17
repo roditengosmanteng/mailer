@@ -17,6 +17,7 @@ import {
   Shield,
   X,
   Trash2,
+  Server,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
 
 const adminItems: NavItem[] = [
   { href: "/admin/users", label: "Manage Users", icon: Users },
+  { href: "/admin/server", label: "Server Specs", icon: Server },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
