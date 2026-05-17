@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
 import {
   Mail,
   Upload,
@@ -10,9 +11,26 @@ import {
   Settings,
   LayoutDashboard,
   Zap,
+  Users,
+  LogOut,
+  Shield,
 } from "lucide-react";
+import { logout } from "@/app/actions/auth";
 
-const navItems = [
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+interface UserData {
+  user: { id: string; name: string; email: string; role: string } | null;
+}
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+}
+
+const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/emails", label: "Emails", icon: Mail, exact: true },
   { href: "/emails/import", label: "Import", icon: Upload },
@@ -21,8 +39,17 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const adminItems: NavItem[] = [
+  { href: "/admin/users", label: "Manage Users", icon: Users },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { data } = useSWR<UserData>("/api/auth/me", fetcher);
+  const user = data?.user;
+  const isAdmin = user?.role === "admin";
+
+  const allItems = [...navItems, ...(isAdmin ? adminItems : [])];
 
   return (
     <aside className="w-64 flex flex-col border-r border-[var(--border)]" style={{ background: "var(--gradient-sidebar)" }}>
@@ -42,13 +69,14 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
-        {navItems.map((item) => {
+        {allItems.map((item) => {
           const isActive = item.exact
             ? pathname === item.href
             : item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
           const Icon = item.icon;
+          const isAdminItem = adminItems.some((ai) => ai.href === item.href);
           return (
             <Link
               key={item.href}
@@ -62,16 +90,51 @@ export function Sidebar() {
             >
               <Icon size={18} className={isActive ? "text-[var(--primary-light)]" : ""} />
               {item.label}
+              {isAdminItem && (
+                <Shield size={12} className="ml-auto text-amber-400 opacity-60" />
+              )}
             </Link>
           );
         })}
       </nav>
-      <div className="p-4 border-t border-[var(--border)] mx-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <p className="text-[11px] text-[var(--muted-foreground)]">
-            System Online · v1.0
-          </p>
+
+      {/* User info & Logout */}
+      <div className="border-t border-[var(--border)] mx-3">
+        {user && (
+          <div className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                style={{ background: isAdmin ? "linear-gradient(135deg, #f59e0b, #ef4444)" : "var(--gradient-primary)" }}>
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[var(--foreground)] truncate">{user.name}</p>
+                <p className="text-[10px] text-[var(--muted-foreground)] truncate">{user.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`badge text-[10px] ${isAdmin ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "badge-info"}`}>
+                {isAdmin ? "Admin" : "User"}
+              </span>
+              <form action={logout} className="ml-auto">
+                <button
+                  type="submit"
+                  className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  title="Sign out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <p className="text-[11px] text-[var(--muted-foreground)]">
+              System Online · v2.0
+            </p>
+          </div>
         </div>
       </div>
     </aside>

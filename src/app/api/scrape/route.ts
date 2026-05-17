@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { aiScrapeEmails } from "@/lib/ai-service";
 import { validateSyntax, extractEmailParts } from "@/lib/email-validator";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+
   try {
     const { targetOrg, targetUrl, providerId, batchName } =
       await request.json();
@@ -20,6 +23,7 @@ export async function POST(request: Request) {
         targetUrl: targetUrl || null,
         aiProviderId: providerId || null,
         status: "running",
+        userId: user?.id || null,
       },
     });
 
@@ -49,6 +53,7 @@ export async function POST(request: Request) {
         totalCount: result.emails.length,
         pendingCount: result.emails.length,
         status: "completed",
+        userId: user?.id || null,
       },
     });
 
@@ -69,6 +74,7 @@ export async function POST(request: Request) {
             status: "pending",
             source: "scrape",
             batchId: batch.id,
+            userId: user?.id || null,
           },
         });
         created++;
@@ -110,7 +116,13 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  const user = await getCurrentUser();
+
+  const where: Record<string, unknown> = {};
+  if (user) where.userId = user.id;
+
   const jobs = await prisma.scrapeJob.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     take: 50,
   });

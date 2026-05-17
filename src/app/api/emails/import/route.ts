@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { validateSyntax, extractEmailParts } from "@/lib/email-validator";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
         totalCount: emailList.length,
         pendingCount: emailList.length,
         status: "processing",
+        userId: user?.id || null,
       },
     });
 
@@ -75,6 +79,7 @@ export async function POST(request: Request) {
         status: syntaxValid ? "pending" : "invalid",
         source: "import" as const,
         batchId: batch.id,
+        userId: user?.id || null,
       };
     });
 

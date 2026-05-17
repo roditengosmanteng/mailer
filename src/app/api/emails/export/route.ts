@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 const ALL_COLUMNS = [
@@ -58,6 +59,7 @@ function getColumnValue(
 }
 
 export async function GET(request: NextRequest) {
+  const user = await getCurrentUser();
   const searchParams = request.nextUrl.searchParams;
   const batchId = searchParams.get("batchId");
   const status = searchParams.get("status") || "valid";
@@ -79,6 +81,8 @@ export async function GET(request: NextRequest) {
   if (batchId) where.batchId = batchId;
   if (status !== "all") where.status = status;
   if (minScore > 0) where.aiScore = { gte: minScore };
+  // Multi-tenant: scope to current user
+  if (user) where.userId = user.id;
 
   const emails = await prisma.email.findMany({
     where,

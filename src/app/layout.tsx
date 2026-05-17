@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
-import { ToastProvider } from "@/components/toast-provider";
+import { getSession } from "@/lib/session";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "MailVerify Pro - Email Marketing Platform",
@@ -9,11 +9,14 @@ export const metadata: Metadata = {
     "Bulk email import, validation, AI verification, and scraping platform",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getSession();
+  const isAuthenticated = !!session?.userId;
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -22,12 +25,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased">
-        <ToastProvider>
-          <div className="flex h-screen bg-mesh">
-            <Sidebar />
-            <main className="flex-1 overflow-auto">{children}</main>
-          </div>
-        </ToastProvider>
+        <AppShell isAuthenticated={isAuthenticated}>
+          {children}
+        </AppShell>
       </body>
     </html>
   );

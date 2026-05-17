@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
 import {
   Mail,
   CheckCircle,
@@ -121,18 +122,23 @@ function DonutChart({
 }
 
 export default async function DashboardPage() {
+  const session = await getSession();
+  const userId = session?.userId;
+  const userFilter = userId ? { userId } : {};
+
   const [totalEmails, validEmails, catchAllEmails, invalidEmails, pendingEmails, totalBatches, scrapeJobs] =
     await Promise.all([
-      prisma.email.count(),
-      prisma.email.count({ where: { status: "valid" } }),
-      prisma.email.count({ where: { status: "catch_all" } }),
-      prisma.email.count({ where: { status: "invalid" } }),
-      prisma.email.count({ where: { status: "pending" } }),
-      prisma.importBatch.count(),
-      prisma.scrapeJob.count(),
+      prisma.email.count({ where: { ...userFilter } }),
+      prisma.email.count({ where: { status: "valid", ...userFilter } }),
+      prisma.email.count({ where: { status: "catch_all", ...userFilter } }),
+      prisma.email.count({ where: { status: "invalid", ...userFilter } }),
+      prisma.email.count({ where: { status: "pending", ...userFilter } }),
+      prisma.importBatch.count({ where: { ...userFilter } }),
+      prisma.scrapeJob.count({ where: { ...userFilter } }),
     ]);
 
   const recentBatches = await prisma.importBatch.findMany({
+    where: { ...userFilter },
     orderBy: { createdAt: "desc" },
     take: 5,
   });
