@@ -304,20 +304,20 @@ function EmailsContent() {
     <div className="p-5 md:p-8 fade-in">
       <ConfirmDialog {...dialogProps} />
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Mail size={24} className="text-[var(--primary-light)]" />
-            <h1 className="text-2xl font-bold">Emails</h1>
+            <h1 className="text-2xl font-bold w-full md:w-auto">Emails</h1>
             {totalEmails > 0 && (
-              <span className="badge badge-info">{totalEmails} total</span>
+              <span className="badge badge-info whitespace-nowrap">{totalEmails} total</span>
             )}
           </div>
           <p className="text-[var(--muted-foreground)] ml-9">
             Manage and validate your email list
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <button
             onClick={handleValidate}
             disabled={validating}
@@ -440,8 +440,8 @@ function EmailsContent() {
         </select>
       </div>
 
-      <div className="glass-card overflow-hidden">
-        <table className="w-full">
+      <div className="glass-card overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[800px]">
           <thead>
             <tr className="border-b border-[var(--border)]">
               <th className="p-3.5 text-left w-10">

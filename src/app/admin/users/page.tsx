@@ -160,12 +160,12 @@ export default function AdminUsersPage() {
       <div className="p-5 md:p-8 fade-in">
         <ConfirmDialog {...dialogProps} />
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <Users size={24} className="text-[var(--primary-light)]" />
-              <h1 className="text-2xl font-bold">Manage Users</h1>
-              <span className="badge badge-info">{users.length} users</span>
+              <h1 className="text-2xl font-bold w-full md:w-auto">Manage Users</h1>
+              <span className="badge badge-info whitespace-nowrap">{users.length} users</span>
             </div>
             <p className="text-[var(--muted-foreground)] ml-9">
               Create and manage user accounts for your team
@@ -173,7 +173,7 @@ export default function AdminUsersPage() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-lg text-sm font-medium btn-primary flex items-center gap-2"
+            className="w-full md:w-auto px-4 py-2 rounded-lg text-sm font-medium btn-primary flex items-center justify-center gap-2"
           >
             <UserPlus size={16} />
             Add New User
@@ -181,8 +181,8 @@ export default function AdminUsersPage() {
         </div>
 
         {/* Users Table */}
-        <div className="glass-card overflow-hidden">
-          <table className="w-full">
+        <div className="glass-card overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[800px]">
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <th className="p-3.5 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
