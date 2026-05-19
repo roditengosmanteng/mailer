@@ -60,7 +60,7 @@ function EmailsContent() {
   const [selectedBatch, setSelectedBatch] = useState<string>("");
   const [renamingBatch, setRenamingBatch] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const statusFilter = searchParams.get("status") || "";
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [validating, setValidating] = useState(false);
@@ -72,7 +72,11 @@ function EmailsContent() {
     (updates: Record<string, string | number>) => {
       const params = new URLSearchParams(searchParams.toString());
       for (const [key, val] of Object.entries(updates)) {
-        params.set(key, String(val));
+        if (val === "" || val === null || val === undefined) {
+          params.delete(key);
+        } else {
+          params.set(key, String(val));
+        }
       }
       router.push(`/emails?${params.toString()}`, { scroll: false });
     },
@@ -425,9 +429,8 @@ function EmailsContent() {
         <select
           value={statusFilter}
           onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setPage(1);
-          }}
+              updateParams({ status: e.target.value, page: 1 });
+            }}
           className="px-3 py-2 rounded-lg text-sm"
         >
           <option value="">All Status</option>
