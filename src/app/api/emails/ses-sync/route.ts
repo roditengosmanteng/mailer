@@ -8,12 +8,6 @@ import { NextRequest, NextResponse } from "next/server";
  * Manually syncs the AWS SES Account-Level Suppression List
  * with the local email database.
  *
- * This is useful for:
- * - One-time cleanup after a bounce/complaint incident
- * - Periodic reconciliation to catch any missed webhook events
- *
- * Call this endpoint from an admin panel or a cron job.
- *
  * Required ENV vars:
  *   AWS_REGION              (e.g. ap-southeast-1)
  *   AWS_ACCESS_KEY_ID
@@ -32,10 +26,19 @@ interface SyncResult {
   }[];
 }
 
+function createSESClient() {
+  return new SESv2Client({
+    region: process.env.AWS_REGION || "ap-southeast-1",
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Optional: check for admin auth header to protect this endpoint
-    // You can add your own auth logic here e.g. check session or API key
+    // Optional: protect this endpoint with an admin key
     const authHeader = request.headers.get("x-admin-key");
     const adminKey = process.env.ADMIN_SYNC_KEY;
 
@@ -43,15 +46,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const region = process.env.AWS_REGION || "ap-southeast-1";
-
-    const client = new SESv2Client({
-      region,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-      },
-    });
+    const client = createSESClient();
 
     const suppressedEmails: {
       address: string;
@@ -60,31 +55,36 @@ export async function POST(request: NextRequest) {
     }[] = [];
 
     // Paginate through all suppressed destinations
-    let nextToken: string | undefined = undefined;
+    let nextToken: string | undefined;
+    let hasMore = true;
 
-    do {
-      const command = new ListSuppressedDestinationsCommand({
+    while (hasMore) {
+      const cmd = new ListSuppressedDestinationsCommand({
         Reasons: [SuppressionListReason.BOUNCE, SuppressionListReason.COMPLAINT],
         MaxItems: 100,
         NextToken: nextToken,
       });
 
-      const response = await client.send(command);
+      const response = await client.send(cmd);
 
       if (response.SuppressedDestinationSummaries) {
         for (const item of response.SuppressedDestinationSummaries) {
           if (item.EmailAddress) {
             suppressedEmails.push({
               address: item.EmailAddress.toLowerCase(),
-              reason: item.Reason || "UNKNOWN",
+              reason: item.Reason ?? "UNKNOWN",
               suppressedAt: item.LastUpdateTime,
             });
           }
         }
       }
 
-      nextToken = response.NextToken;
-    } while (nextToken);
+      if (response.NextToken) {
+        nextToken = response.NextToken;
+      } else {
+        hasMore = false;
+      }
+    }
 
     if (suppressedEmails.length === 0) {
       return NextResponse.json({
@@ -98,7 +98,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Split by reason
     const bouncedAddresses = suppressedEmails
       .filter((e) => e.reason === SuppressionListReason.BOUNCE)
       .map((e) => e.address);
@@ -109,30 +108,18 @@ export async function POST(request: NextRequest) {
 
     let updatedCount = 0;
 
-    // Update bounced emails
     if (bouncedAddresses.length > 0) {
       const result = await prisma.email.updateMany({
-        where: {
-          address: { in: bouncedAddresses },
-          deletedAt: null,
-        },
-        data: {
-          status: "bounced",
-        },
+        where: { address: { in: bouncedAddresses }, deletedAt: null },
+        data: { status: "bounced" },
       });
       updatedCount += result.count;
     }
 
-    // Update complained emails
     if (complainedAddresses.length > 0) {
       const result = await prisma.email.updateMany({
-        where: {
-          address: { in: complainedAddresses },
-          deletedAt: null,
-        },
-        data: {
-          status: "complained",
-        },
+        where: { address: { in: complainedAddresses }, deletedAt: null },
+        data: { status: "complained" },
       });
       updatedCount += result.count;
     }
@@ -162,26 +149,17 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - returns current suppression list count without updating DB
 export async function GET() {
   try {
-    const region = process.env.AWS_REGION || "ap-southeast-1";
+    const client = createSESClient();
 
-    const client = new SESv2Client({
-      region,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-      },
-    });
-
-    const command = new ListSuppressedDestinationsCommand({
+    const cmd = new ListSuppressedDestinationsCommand({
       Reasons: [SuppressionListReason.BOUNCE, SuppressionListReason.COMPLAINT],
       MaxItems: 10,
     });
 
-    const response = await client.send(command);
-    const count = response.SuppressedDestinationSummaries?.length || 0;
+    const response = await client.send(cmd);
+    const count = response.SuppressedDestinationSummaries?.length ?? 0;
 
     return NextResponse.json({
       status: "ok",
